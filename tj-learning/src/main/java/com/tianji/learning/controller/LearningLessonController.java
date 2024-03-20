@@ -81,6 +81,7 @@ public class LearningLessonController {
         lessonService.createLearningPlan(dto);
     }
 
+    @ApiOperation("查询学习计划进度")
     @GetMapping("plans")
     public LearningPlanPageVO queryMyPlans(PageQuery query) {
         return lessonService.queryMyPlans(query);
