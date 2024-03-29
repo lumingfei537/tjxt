@@ -13,4 +13,6 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface IPointsBoardSeasonService extends IService<PointsBoardSeason> {
 
+    //方法作用：创建上赛季的表
+    void createPointsBoardLatestTable(Integer id);
 }

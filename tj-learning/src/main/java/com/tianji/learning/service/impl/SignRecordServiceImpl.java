@@ -58,7 +58,8 @@ public class SignRecordServiceImpl implements ISignRecordService {
         }
 
         // 6. 保存积分
-        mqHelper.send(MqConstants.Exchange.LEARNING_EXCHANGE,
+        mqHelper.send(
+                MqConstants.Exchange.LEARNING_EXCHANGE,
                 MqConstants.Key.SIGN_IN,
                 SignInMessage.of(userId, rewardPoints + 1));
 
@@ -67,6 +68,36 @@ public class SignRecordServiceImpl implements ISignRecordService {
         vo.setSignDays(days);
         vo.setRewardPoints(rewardPoints);
         return vo;
+    }
+
+    @Override
+    public Byte[] querySignRecords() {
+        // 1.获取当前登录用户id
+        Long userId = UserContext.getUser();
+        // 2.拼接key
+        LocalDate now = LocalDate.now();
+        String format = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        int dayOfMonth = now.getDayOfMonth();
+
+        String key = RedisConstants.SIGN_RECORD_KEY_PREFIX + userId.toString() + format;
+
+        // 3.查询签到记录
+        List<Long> bitField = redisTemplate.opsForValue().bitField(key,
+                BitFieldSubCommands.create().get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0));
+        if (CollUtils.isEmpty(bitField)) {
+            return new Byte[0];
+        }
+
+        int num = bitField.get(0).intValue();
+
+        Byte[] arr = new Byte[dayOfMonth];
+        int pos = dayOfMonth - 1;
+        while (pos >= 0) {
+            arr[pos--] = (byte) (num & 1);
+            // 把数字右移一位，抛弃最后一个bit位，继续下一个bit位
+            num >>>= 1;
+        }
+        return arr;
     }
 
     /**
