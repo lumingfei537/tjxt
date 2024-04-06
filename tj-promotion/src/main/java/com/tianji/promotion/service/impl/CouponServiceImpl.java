@@ -9,8 +9,10 @@ import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.utils.BeanUtils;
 import com.tianji.common.utils.CollUtils;
+import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.StringUtils;
 import com.tianji.common.utils.UserContext;
+import com.tianji.promotion.constants.PromotionConstants;
 import com.tianji.promotion.domain.dto.CouponFormDTO;
 import com.tianji.promotion.domain.dto.CouponIssueFormDTO;
 import com.tianji.promotion.domain.po.Coupon;
@@ -37,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -263,7 +266,23 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         }
         this.updateById(tmp);
 
-        // 5.如果优惠券的领取方式为指定发放 ，需要生成兑换码
+        // 5.如果优惠券时立刻发放， 将优惠券信息（id，领券开始时间，领券结束时间，发行总数量，限领数量）采用HASH结构存入redis
+        if (isBeginIssue) {
+            String key = PromotionConstants.COUPON_CACHE_KEY_PREFIX + id;//prs:coupon:优惠券id
+            // redisTemplate.opsForHash().put(key, "issueBeginTime", String.valueOf(DateUtils.toEpochMilli(now)));
+            // redisTemplate.opsForHash().put(key, "issueEndTime", String.valueOf(DateUtils.toEpochMilli(dto.getIssueEndTime())));
+            // redisTemplate.opsForHash().put(key, "totalNum", String.valueOf(coupon.getTotalNum()));
+            // redisTemplate.opsForHash().put(key, "userLimit", String.valueOf(coupon.getUserLimit()));
+
+            Map<String, String> map = new HashMap<>();
+            map.put("issueBeginTime", String.valueOf(DateUtils.toEpochMilli(now)));
+            map.put("issueEndTime", String.valueOf(DateUtils.toEpochMilli(dto.getIssueEndTime())));
+            map.put("totalNum", String.valueOf(coupon.getTotalNum()));
+            map.put("userLimit", String.valueOf(coupon.getUserLimit()));
+            redisTemplate.opsForHash().putAll(key, map);
+        }
+
+        // 6.如果优惠券的领取方式为指定发放 ，需要生成兑换码
         // 优惠券的领取方式为指定发送 且 优惠券之前的状态为待发送
         if (coupon.getObtainWay() == ObtainType.ISSUE && coupon.getStatus() == CouponStatus.DRAFT) {
             // 兑换码的截止时间 就是优惠券的领取截止时间； 该时间是从前端传的封装到了couponDB中
@@ -290,7 +309,8 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         if (!success) {
             log.error("重复暂停优惠券");
         }
-        //TODO 4.删除缓存
+        //4.删除缓存
+        redisTemplate.delete(PromotionConstants.COUPON_CACHE_KEY_PREFIX + id);
     }
 
     @Override

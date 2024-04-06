@@ -44,3 +44,7 @@ tj:
       enable: true
       excludeLoginPaths:
         - /coupons/list #放行优惠券列表-用户端
+  mq:
+    listener:
+      retry:
+        stateless: false # true无状态；false有状态。如果业务中包含事务，这里改为false

@@ -22,9 +22,14 @@ import com.tianji.promotion.mapper.UserCouponMapper;
 import com.tianji.promotion.service.IExchangeCodeService;
 import com.tianji.promotion.service.IUserCouponService;
 import com.tianji.promotion.utils.CodeUtil;
+import com.tianji.promotion.utils.MyLock;
+import com.tianji.promotion.utils.MyLockStrategy;
+import com.tianji.promotion.utils.MyLockType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,10 +51,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
+public class UserCouponRedissonCustomeServiceImpl extends ServiceImpl<UserCouponMapper, UserCoupon> implements IUserCouponService {
 
     private final CouponMapper couponMapper;
     private final IExchangeCodeService exchangeCodeService;
+    private final StringRedisTemplate redisTemplate;
+    private final RedissonClient redissonClient;
     // 领取优惠券
     @Override
     // @Transactional
@@ -73,6 +80,7 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
             throw new BadRequestException("该优惠券库存不足");
         }
         Long userId = UserContext.getUser();
+
         // 获取当前用户 对该优惠券 已领数量 user_coupon表  条件：userid couponId 统计数量
         */
 /*Integer count = this.lambdaQuery()
@@ -87,19 +95,45 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
         // 3.生成用户券
         saveUserCoupon(userId, coupon);*//*
 
+
         // checkAndCreateUserCoupon(userId, coupon, null);
+
         */
 /*synchronized (userId.toString().intern()) {
             checkAndCreateUserCoupon(userId, coupon, null);
         }*//*
 
-        synchronized (userId.toString().intern()) {
+
+        */
+/*synchronized (userId.toString().intern()) {
             // 从aop上下文中 获取当前类的代理对象
             IUserCouponService userCouponServiceProxy = (IUserCouponService) AopContext.currentProxy();
             //checkAndCreateUserCoupon(userId, coupon, null);//这种写法是调用原对象
             userCouponServiceProxy.checkAndCreateUserCoupon(userId, coupon, null);// 这种写法是调用代理对象的方法 方法是有事务的
-        }
+        }*//*
 
+
+        // 通过redisson实现分布式锁
+        */
+/*String key = "lock:coupon:uid:" + userId;
+        RLock lock = redissonClient.getLock(key);
+        try {
+            // boolean isLock = lock.tryLock(1, 5, TimeUnit.SECONDS);// 看门狗会失效
+            boolean isLock = lock.tryLock(); // 看门狗机制生效 ，默认失效时间为30秒
+            if (!isLock) {
+                throw new BizIllegalException("操作太频繁了");
+            }
+            // 从aop上下文中 获取当前类的代理对象
+            IUserCouponService userCouponServiceProxy = (IUserCouponService) AopContext.currentProxy();
+            //checkAndCreateUserCoupon(userId, coupon, null);//这种写法是调用原对象
+            userCouponServiceProxy.checkAndCreateUserCoupon(userId, coupon, null);// 这种写法是调用代理对象的方法 方法是有事务的
+        } finally {
+            lock.unlock();
+        }*//*
+
+
+        IUserCouponService userCouponServiceProxy = (IUserCouponService) AopContext.currentProxy();
+        userCouponServiceProxy.checkAndCreateUserCoupon(userId, coupon, null);
     }
 
     @Override
@@ -144,6 +178,8 @@ public class UserCouponServiceImpl extends ServiceImpl<UserCouponMapper, UserCou
         }
     }
 
+    @Override
+    @MyLock(name = "lock:coupon:uid:#{userId}", lockType = MyLockType.RE_ENTRANT_LOCK, lockStrategy = MyLockStrategy.FAIL_AFTER_RETRY_TIMEOUT)
     @Transactional
     public void checkAndCreateUserCoupon(Long userId, Coupon coupon, Long serialNum) {
         // Long类型 -128-127 之间是同一个对象， 超过区间是不同的对象

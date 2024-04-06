@@ -64,8 +64,8 @@ public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, Exc
         //将兑换码信息保存到db
         this.saveBatch(list);
 
-        //
-        redisTemplate.opsForZSet().add(PromotionConstants.COUPON_RANGE_KEY, coupon.getId().toString(), maxSerialNum);
+        //将兑换码写入redis中 ， coupon:code:range：兑换码的最大序列号
+        // redisTemplate.opsForZSet().add(PromotionConstants.COUPON_RANGE_KEY, coupon.getId().toString(), maxSerialNum);
     }
 
     @Override
